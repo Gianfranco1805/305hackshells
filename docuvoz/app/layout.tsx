@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Document Assistant",
+  title: "LegalEase",
   description: "Bilingual document assistant for Spanish-speaking communities",
 };
 
