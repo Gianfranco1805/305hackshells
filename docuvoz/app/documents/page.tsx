@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useLanguage } from "@/lib/contexts/LanguageContext";
 
 type MockDoc = { id: string; fileName: string; date: string; preview: string; folderId: string | null };
 type Folder = { id: string; name: string; parentId: string | null; isEditing: boolean };
