@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DocuVoz",
+  title: "LegalEase",
   description: "Bilingual document assistant for Spanish-speaking communities",
 };
 
