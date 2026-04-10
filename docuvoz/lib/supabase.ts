@@ -11,15 +11,15 @@ function requireEnv(name: string) {
   return value;
 }
 
-const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-const supabaseServiceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-
 /**
  * Server-side Supabase client for use in API routes and Server Components.
  * Uses the service role key — never call this client-side.
  * Throws if the caller is not authenticated.
  */
 export function createServiceClient() {
+  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseServiceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+
   return createClient(supabaseUrl, supabaseServiceKey, {
     auth: { persistSession: false },
   });
