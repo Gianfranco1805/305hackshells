@@ -28,7 +28,7 @@ export default function LandingPage() {
             )}
           </p>
 
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <Link
               href="/upload"
               className="flex h-14 items-center justify-center rounded-2xl bg-zinc-100 px-6 text-lg font-semibold text-black transition hover:bg-white sm:w-64"
@@ -40,6 +40,12 @@ export default function LandingPage() {
               className="flex h-14 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 px-6 text-lg font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 sm:w-64"
             >
               {t("Take a photo", "Tomar una foto")}
+            </Link>
+            <Link
+              href="/documents"
+              className="flex h-14 items-center justify-center rounded-2xl border border-emerald-700/60 bg-emerald-500/10 px-6 text-lg font-semibold text-emerald-200 transition hover:border-emerald-500 hover:bg-emerald-500/15 sm:w-64"
+            >
+              {t("View uploaded documents", "Ver documentos subidos")}
             </Link>
           </div>
         </section>
