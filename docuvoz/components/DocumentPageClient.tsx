@@ -696,17 +696,19 @@ export default function DocumentPageClient({
                     ? t("Assistant", "Asistente")
                     : t("You", "Tu")}
                 </p>
-                <div
-                  className="whitespace-pre-wrap"
-                  style={{
-                    fontSize: "14px",
-                    lineHeight: 1.47,
-                    letterSpacing: "-0.224px",
-                    color: "#ffffff",
-                  }}
-                >
-                  {entry.message}
-                </div>
+                <div className="whitespace-pre-wrap">{entry.message}</div>
+                
+                {entry.role === "assistant" && (
+                  <div className="mt-3 flex">
+                    <SpeakButton 
+                      text={entry.message} 
+                      voiceId={selectedVoiceId}
+                      defaultLabel={t("Listen", "Escuchar")} 
+                      loadingLabel={t("Loading...", "Cargando...")}
+                      className="inline-flex items-center justify-center rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:bg-zinc-800/50 disabled:text-zinc-500"
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
