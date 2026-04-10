@@ -52,9 +52,7 @@ export default function Header() {
             </div>
           )}
 
-          {isLoaded && isSignedIn && (
-            <UserButton afterSignOutUrl="/" />
-          )}
+          {isLoaded && isSignedIn && <UserButton />}
         </div>
       </div>
     </header>
