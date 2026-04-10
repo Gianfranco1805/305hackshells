@@ -19,3 +19,31 @@ export type Voice = {
   name: string;
   language: "es" | "en";
 };
+
+export type DocumentLanguage = "en" | "es" | "ht" | "other";
+
+export type UploadDocumentResponse = {
+  data: {
+    id: number;
+    title: string;
+    language: string;
+    extraction_status: string;
+    extractionStatus?: string;
+    storage_path: string;
+    storagePath?: string;
+    metadata_path: string;
+    metadataPath?: string;
+    storageBucket?: string;
+    metadataBucket?: string;
+  };
+};
+
+export type PrivateDocumentListItem = {
+  id: number;
+  title: string;
+  language: string;
+  file_name: string;
+  mime_type: string | null;
+  extraction_status: string;
+  created_at: string;
+};

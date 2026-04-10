@@ -68,8 +68,13 @@ export async function POST(request: Request) {
         title: result.document.title,
         language: result.document.language,
         extraction_status: result.document.extraction_status,
+        extractionStatus: result.document.extraction_status,
         storage_path: result.document.storage_path,
+        storagePath: result.document.storage_path,
         metadata_path: result.document.metadata_path,
+        metadataPath: result.document.metadata_path,
+        storageBucket: result.document.storage_bucket,
+        metadataBucket: result.document.metadata_bucket,
       },
     });
   } catch (error) {
