@@ -1,4 +1,6 @@
 "use client";
+export { default } from "./UploadClient";
+/*
 
 import React, { useRef, useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
@@ -115,7 +117,7 @@ export default function UploadPage() {
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-black text-white px-6 py-12 relative overflow-hidden">
       
-      {/* Live Webcam Modal Overlay */}
+      [Live Webcam Modal Overlay]
       {isCameraOpen && (
         <div className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6">
           <div className="relative w-full max-w-2xl bg-zinc-900 rounded-3xl overflow-hidden border-2 border-zinc-700 shadow-2xl">
@@ -125,7 +127,7 @@ export default function UploadPage() {
               playsInline 
               className="w-full h-auto bg-black"
             />
-            {/* Hidden canvas for capturing frame */}
+            [Hidden canvas for capturing frame]
             <canvas ref={canvasRef} className="hidden" />
             
             <div className="absolute bottom-0 w-full p-6 flex justify-between items-center bg-gradient-to-t from-black/80 to-transparent">
@@ -141,7 +143,7 @@ export default function UploadPage() {
                 className="w-16 h-16 rounded-full bg-white border-4 border-zinc-400 hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.4)]"
               ></button>
               
-              <div className="w-[88px]"></div> {/* Spacer to center the capture button */}
+              <div className="w-[88px]"></div> [Spacer to center the capture button]
             </div>
           </div>
         </div>
@@ -161,7 +163,7 @@ export default function UploadPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl relative z-10">
         
-        {/* Drag and Drop File Upload Area */}
+        [Drag and Drop File Upload Area]
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -182,7 +184,7 @@ export default function UploadPage() {
           <p className="text-sm text-zinc-500 text-center">
             {t("Supports PDF, JPG, PNG", "Soporta PDF, JPG, PNG")}
           </p>
-          {/* Hidden file input */}
+          [Hidden file input]
           <input
             type="file"
             ref={fileInputRef}
@@ -192,7 +194,7 @@ export default function UploadPage() {
           />
         </div>
 
-        {/* Live Camera Button */}
+        [Live Camera Button]
         <div
           onClick={openCamera}
           className="flex flex-col items-center justify-center p-12 rounded-3xl border border-zinc-800 bg-zinc-950 cursor-pointer transition-all duration-300 hover:bg-zinc-900 shadow-lg"
@@ -215,3 +217,4 @@ export default function UploadPage() {
     </div>
   );
 }
+*/

@@ -1,19 +1,8 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { useLanguage } from "@/lib/contexts/LanguageContext";
-
-type MockDoc = { id: string; fileName: string; date: string; preview: string };
+import { redirect } from "next/navigation";
 
 export default function DocumentsPage() {
-  const { t } = useLanguage();
-  const [recentDocs, setRecentDocs] = useState<MockDoc[]>([]);
-
-  useEffect(() => {
-    const loaded = JSON.parse(localStorage.getItem("mock_recent_docs") || "[]");
-    setRecentDocs(loaded);
-  }, []);
+  redirect("/dashboard");
+  /*
 
   return (
     <div className="flex flex-col flex-1 items-center bg-black text-white px-6 py-12 min-h-screen">
@@ -32,7 +21,7 @@ export default function DocumentsPage() {
           </Link>
         </div>
 
-        {/* Recently Received Documents */}
+        [Recently Received Documents]
         <div className="mb-12">
           <h2 className="text-xl font-semibold text-zinc-200 mb-6">
             {t("Recently Received Documents", "Documentos Recibidos Recientemente")}
@@ -43,7 +32,7 @@ export default function DocumentsPage() {
               {recentDocs.map((doc) => (
                 <div key={doc.id} className="flex flex-col p-4 border border-zinc-800 bg-zinc-950 rounded-2xl hover:border-zinc-500 transition-colors cursor-pointer group">
                   <div className="w-full h-32 bg-zinc-900 rounded-xl mb-4 overflow-hidden flex items-center justify-center border border-zinc-800">
-                    {/* Fake visual preview */}
+                    [Fake visual preview]
                     {doc.preview.startsWith("data:image") ? (
                       <img src={doc.preview} alt="preview" className="object-cover w-full h-full opacity-80 group-hover:scale-105 transition-transform" />
                     ) : (
@@ -66,7 +55,7 @@ export default function DocumentsPage() {
           )}
         </div>
 
-        {/* Translated Docs Section */}
+        [Translated Docs Section]
         <div>
           <h2 className="text-xl font-semibold text-zinc-200 mb-6">
             {t("Translated Docs", "Documentos Traducidos")}
@@ -84,4 +73,5 @@ export default function DocumentsPage() {
       </div>
     </div>
   );
+  */
 }

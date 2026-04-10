@@ -1,10 +1,16 @@
-"use client";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import LandingPage from "@/components/LandingPage";
 
-import Link from "next/link";
-import { useLanguage } from "@/lib/contexts/LanguageContext";
+export default async function Home() {
+  const { userId } = await auth();
 
-export default function Home() {
-  const { t } = useLanguage();
+  if (userId) {
+    redirect("/upload");
+  }
+
+  return <LandingPage />;
+  /*
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-black text-white relative">
@@ -47,4 +53,5 @@ export default function Home() {
       </main>
     </div>
   );
+  */
 }
