@@ -84,13 +84,20 @@ export async function POST(
       const translation = Array.isArray(typedDocument.private_document_translations)
         ? typedDocument.private_document_translations[0]
         : typedDocument.private_document_translations;
+      const fallbackDocumentText = [
+        translation?.translated_text?.trim() || "",
+        translation?.summary_es?.trim() || "",
+        ...(translation?.summary_points_json ?? []),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
 
-      if (!documentText?.trim()) {
+      if (!documentText?.trim() && !fallbackDocumentText.trim()) {
         return apiError("This document does not have readable text to chat about yet.", 400);
       }
 
       const result = await generateDocumentChatResponse({
-        documentText,
+        documentText: documentText?.trim() || fallbackDocumentText,
         translatedText: translation?.translated_text ?? null,
         summary: translation?.summary_es ?? null,
         summaryBullets: translation?.summary_points_json ?? [],
@@ -111,12 +118,14 @@ export async function POST(
       return apiError("Document not found.", 404);
     }
 
-    if (!legacyDocument.extracted_text?.trim()) {
+    const legacyFallbackText = legacyDocument.translated_text?.trim() || "";
+
+    if (!legacyDocument.extracted_text?.trim() && !legacyFallbackText) {
       return apiError("This document does not have readable text to chat about yet.", 400);
     }
 
     const result = await generateDocumentChatResponse({
-      documentText: legacyDocument.extracted_text,
+      documentText: legacyDocument.extracted_text?.trim() || legacyFallbackText,
       translatedText: legacyDocument.translated_text,
       conversationHistory: body.conversationHistory ?? [],
       message,

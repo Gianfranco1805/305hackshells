@@ -1,27 +1,125 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-function wrapText(text: string, maxChars: number) {
+type EmbeddedFont = Awaited<ReturnType<PDFDocument["embedFont"]>>;
+
+function countLeadingSpaces(value: string) {
+  const match = value.match(/^ */);
+  return match ? match[0].length : 0;
+}
+
+function wrapLineToWidth(params: {
+  text: string;
+  font: EmbeddedFont;
+  size: number;
+  maxWidth: number;
+  firstPrefix?: string;
+  continuationPrefix?: string;
+}) {
+  const {
+    text,
+    font,
+    size,
+    maxWidth,
+    firstPrefix = "",
+    continuationPrefix = firstPrefix,
+  } = params;
+
   const words = text.split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) {
+    return [firstPrefix.trimEnd()];
+  }
+
   const lines: string[] = [];
-  let currentLine = "";
+  let currentPrefix = firstPrefix;
+  let currentText = "";
+
+  const fits = (prefix: string, content: string) =>
+    font.widthOfTextAtSize(`${prefix}${content}`, size) <= maxWidth;
 
   for (const word of words) {
-    const nextLine = currentLine ? `${currentLine} ${word}` : word;
-    if (nextLine.length > maxChars) {
-      if (currentLine) {
-        lines.push(currentLine);
+    const candidate = currentText ? `${currentText} ${word}` : word;
+
+    if (!currentText || fits(currentPrefix, candidate)) {
+      currentText = candidate;
+      continue;
+    }
+
+    lines.push(`${currentPrefix}${currentText}`.trimEnd());
+    currentPrefix = continuationPrefix;
+    currentText = word;
+
+    while (!fits(currentPrefix, currentText) && currentText.length > 1) {
+      let splitIndex = currentText.length - 1;
+
+      while (
+        splitIndex > 1 &&
+        !fits(currentPrefix, `${currentText.slice(0, splitIndex)}-`)
+      ) {
+        splitIndex -= 1;
       }
-      currentLine = word;
-    } else {
-      currentLine = nextLine;
+
+      if (splitIndex <= 1) {
+        break;
+      }
+
+      lines.push(`${currentPrefix}${currentText.slice(0, splitIndex)}-`);
+      currentText = currentText.slice(splitIndex);
     }
   }
 
-  if (currentLine) {
-    lines.push(currentLine);
+  if (currentText) {
+    lines.push(`${currentPrefix}${currentText}`.trimEnd());
   }
 
   return lines;
+}
+
+function getLineStyle(rawLine: string, left: number) {
+  const expandedLine = rawLine.replace(/\t/g, "    ").trimEnd();
+  const trimmedLine = expandedLine.trim();
+
+  if (!trimmedLine) {
+    return null;
+  }
+
+  const leadingSpaces = countLeadingSpaces(expandedLine);
+  const indentSpaces = " ".repeat(Math.min(leadingSpaces, 12));
+  const bulletMatch = trimmedLine.match(/^([•*-]|\d+[\.\)])\s+(.*)$/);
+  const isHeading =
+    !bulletMatch &&
+    trimmedLine.length <= 90 &&
+    (trimmedLine === trimmedLine.toUpperCase() ||
+      trimmedLine.endsWith(":") ||
+      /^\d+(\.\d+)*[\.\)]/.test(trimmedLine));
+
+  if (bulletMatch) {
+    const marker = bulletMatch[1];
+    const content = bulletMatch[2];
+    const continuationIndent = " ".repeat(
+      Math.min(Math.max(marker.length + 1, leadingSpaces + 2), 12),
+    );
+
+    return {
+      text: content,
+      x: left,
+      firstPrefix: `${indentSpaces}${marker} `,
+      continuationPrefix: continuationIndent,
+      fontType: "body" as const,
+      size: 11,
+      extraSpacing: 4,
+    };
+  }
+
+  return {
+    text: trimmedLine,
+    x: left,
+    firstPrefix: indentSpaces,
+    continuationPrefix: indentSpaces,
+    fontType: isHeading ? ("heading" as const) : ("body" as const),
+    size: isHeading ? 11.5 : 11,
+    extraSpacing: isHeading ? 8 : 4,
+  };
 }
 
 export async function renderSpanishPdf(params: {
@@ -29,14 +127,15 @@ export async function renderSpanishPdf(params: {
   translatedText: string;
 }) {
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const bodyFont = await pdfDoc.embedFont(StandardFonts.Courier);
+  const headingFont = await pdfDoc.embedFont(StandardFonts.CourierBold);
 
   let page = pdfDoc.addPage([612, 792]);
   let cursorY = 750;
   const left = 50;
   const right = 562;
-  const lineHeight = 18;
+  const lineHeight = 16;
+  const maxWidth = right - left;
 
   const ensureSpace = (neededLines = 1) => {
     if (cursorY - neededLines * lineHeight < 60) {
@@ -48,57 +147,52 @@ export async function renderSpanishPdf(params: {
   page.drawText(params.title, {
     x: left,
     y: cursorY,
-    size: 18,
-    font: boldFont,
+    size: 16,
+    font: headingFont,
     color: rgb(0.1, 0.1, 0.1),
   });
-  cursorY -= 34;
-  ensureSpace(2);
+  cursorY -= 30;
+
   page.drawText("Traduccion completa", {
     x: left,
     y: cursorY,
-    size: 13,
-    font: boldFont,
+    size: 12,
+    font: headingFont,
     color: rgb(0.2, 0.2, 0.2),
   });
-  cursorY -= 24;
+  cursorY -= 22;
 
   for (const rawLine of params.translatedText.split("\n")) {
-    const line = rawLine.replace(/\t/g, "    ").trimEnd();
+    const style = getLineStyle(rawLine, left);
 
-    if (!line.trim()) {
+    if (!style) {
       cursorY -= lineHeight;
       continue;
     }
 
-    const isHeading =
-      line.length < 70 &&
-      (line === line.toUpperCase() ||
-        line.endsWith(":") ||
-        /^\d+(\.\d+)*[\).\s]/.test(line));
-    const isBullet = /^[-*•]\s+/.test(line);
-    const indent = isBullet ? left + 12 : left;
-    const content = isBullet ? line.replace(/^[-*•]\s+/, "• ") : line;
-    const maxChars = isBullet ? 76 : 82;
-    const activeFont = isHeading ? boldFont : font;
-    const activeSize = isHeading ? 11.5 : 11;
+    const activeFont = style.fontType === "heading" ? headingFont : bodyFont;
+    const wrappedLines = wrapLineToWidth({
+      text: style.text,
+      font: activeFont,
+      size: style.size,
+      maxWidth,
+      firstPrefix: style.firstPrefix,
+      continuationPrefix: style.continuationPrefix,
+    });
 
-    const lines = wrapText(content, maxChars);
-
-    for (const line of lines) {
+    for (const wrappedLine of wrappedLines) {
       ensureSpace();
-      page.drawText(line, {
-        x: indent,
+      page.drawText(wrappedLine, {
+        x: style.x,
         y: cursorY,
-        size: activeSize,
+        size: style.size,
         font: activeFont,
         color: rgb(0.15, 0.15, 0.15),
-        maxWidth: right - left,
       });
       cursorY -= lineHeight;
     }
 
-    cursorY -= isHeading ? 8 : 6;
+    cursorY -= style.extraSpacing;
   }
 
   return Buffer.from(await pdfDoc.save());
