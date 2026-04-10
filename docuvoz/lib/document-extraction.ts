@@ -12,10 +12,6 @@ export type ExtractionResult = {
   isFillablePdf: boolean;
 };
 
-function bufferToUint8Array(buffer: Buffer) {
-  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-}
-
 export async function extractDocumentText(
   fileBuffer: Buffer,
   fileExtension: string,
@@ -55,7 +51,7 @@ export async function extractDocumentText(
   ) {
     try {
       const result = await mammoth.extractRawText({
-        buffer: bufferToUint8Array(fileBuffer),
+        buffer: fileBuffer,
       });
       const extractedText = result.value.trim();
 

@@ -1,5 +1,7 @@
 export type DocumentStatus = "processing" | "ready" | "error";
 
+export type DocumentLanguage = "en" | "es" | "ht" | "other";
+
 export type Document = {
   id: string;
   user_id: string;
