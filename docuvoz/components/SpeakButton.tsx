@@ -7,6 +7,7 @@ type SpeakButtonProps = {
   defaultLabel: string;
   loadingLabel: string;
   voiceId?: string;
+  className?: string;
 };
 
 export default function SpeakButton({
@@ -14,6 +15,7 @@ export default function SpeakButton({
   defaultLabel,
   loadingLabel,
   voiceId,
+  className,
 }: SpeakButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -65,7 +67,7 @@ export default function SpeakButton({
       type="button"
       onClick={handleSpeak}
       disabled={isLoading}
-      className="inline-flex items-center justify-center rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-400"
+      className={className || "inline-flex items-center justify-center rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-400"}
     >
       {isLoading ? loadingLabel : defaultLabel}
     </button>
