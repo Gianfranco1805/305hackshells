@@ -95,18 +95,6 @@ export async function createPrivateDocument(
   const fileHash = sha256(input.fileBuffer);
   const safeBaseName = slugify(path.parse(input.fileName).name || input.title);
 
-  const { data: duplicate } = await client
-    .from("private_documents")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("sha256_hash", fileHash)
-    .limit(1)
-    .maybeSingle();
-
-  if (duplicate) {
-    throw new Error("You already uploaded this document.");
-  }
-
   const { data: insertedRows, error: insertError } = await client
     .from("private_documents")
     .insert({

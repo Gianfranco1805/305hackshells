@@ -1,6 +1,6 @@
 import { listDocumentsForUser, mapDocumentRow } from "@/lib/documents";
 import { apiError, apiSuccess, createServerClient } from "@/lib/supabase";
-import type { DocumentStatus } from "@/types";
+import type { DocumentStatus, DocumentsPageItem } from "@/types";
 
 type CreateDocumentBody = {
   file_name?: string;
@@ -15,9 +15,66 @@ type CreateDocumentBody = {
 
 export async function GET() {
   const { client, userId } = await createServerClient();
-  const documents = await listDocumentsForUser(client, userId);
+  const [legacyDocuments, privateDocumentsResult] = await Promise.all([
+    listDocumentsForUser(client, userId),
+    client
+      .from("private_documents")
+      .select(
+        "id,title,file_name,mime_type,created_at,private_document_translations(translation_status,summary_es,translated_pdf_path,translated_text_path)",
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  return apiSuccess(documents);
+  if (privateDocumentsResult.error) {
+    return apiError(
+      `Unable to load private documents: ${privateDocumentsResult.error.message}`,
+      500,
+    );
+  }
+
+  const privateDocuments: DocumentsPageItem[] = (privateDocumentsResult.data ?? []).map(
+    (row) => {
+      const translation = Array.isArray(row.private_document_translations)
+        ? row.private_document_translations[0]
+        : row.private_document_translations;
+
+      const translationStatus =
+        translation?.translation_status ?? "unavailable";
+      const hasTranslation = translationStatus === "completed";
+
+      return {
+        id: String(row.id),
+        title: row.title ?? row.file_name ?? "Untitled document",
+        fileName: row.file_name ?? row.title ?? "Untitled document",
+        createdAt: row.created_at ?? new Date().toISOString(),
+        mimeType: row.mime_type ?? null,
+        source: "private",
+        translationStatus,
+        hasTranslation,
+        summaryEs: translation?.summary_es ?? null,
+      };
+    },
+  );
+
+  const legacyItems: DocumentsPageItem[] = legacyDocuments.map((document) => ({
+    id: document.id,
+    title: document.file_name,
+    fileName: document.file_name,
+    createdAt: document.created_at,
+    mimeType: document.mime_type,
+    source: "legacy",
+    translationStatus:
+      document.status === "ready"
+        ? "ready"
+        : document.status === "error"
+          ? "failed"
+          : "processing",
+    hasTranslation: Boolean(document.translated_text),
+    summaryEs: null,
+  }));
+
+  return apiSuccess([...privateDocuments, ...legacyItems]);
 }
 
 export async function POST(request: Request) {

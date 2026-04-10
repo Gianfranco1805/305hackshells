@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase";
+import { deletePrivateDocumentTranslation } from "@/lib/document-translation";
 
 function parseId(value: string) {
   const parsed = Number.parseInt(value, 10);
@@ -37,6 +38,38 @@ export async function GET(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to load translation.";
+
+    return Response.json(
+      { error: message },
+      {
+        status: message.toLowerCase().includes("unauthenticated") ? 401 : 500,
+      },
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const params = await context.params;
+    const documentId = parseId(params.id);
+
+    if (!documentId) {
+      return Response.json({ error: "Invalid document id." }, { status: 400 });
+    }
+
+    const result = await deletePrivateDocumentTranslation(documentId);
+
+    return Response.json({ data: result });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete translation.";
+
+    if (message.toLowerCase().includes("translation not found")) {
+      return Response.json({ error: message }, { status: 404 });
+    }
 
     return Response.json(
       { error: message },

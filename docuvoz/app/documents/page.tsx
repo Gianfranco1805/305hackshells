@@ -1,336 +1,295 @@
 "use client";
 
-import React, { useState } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useLanguage } from "../../lib/contexts/LanguageContext";
+import { useRouter } from "next/navigation";
+import { useLanguage } from "@/lib/contexts/LanguageContext";
+import type { DocumentsPageItem } from "@/types";
 
-interface MockDoc {
-  id: string;
-  fileName: string;
-  date: string;
-  preview: string;
-  folderId: string | null;
+type LoadState = "loading" | "ready" | "error";
+
+function formatStatus(item: DocumentsPageItem) {
+  if (item.hasTranslation) {
+    return "translated";
+  }
+
+  if (item.translationStatus === "processing") {
+    return "processing";
+  }
+
+  if (item.translationStatus === "failed") {
+    return "failed";
+  }
+
+  return "uploaded";
 }
 
-interface Folder {
-  id: string;
-  name: string;
-  parentId: string | null;
-  isEditing: boolean;
-}
-
-function loadRecentDocs(): MockDoc[] {
-  if (typeof window === "undefined") {
-    return [];
+function getStatusClasses(status: string) {
+  if (status === "translated") {
+    return "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
   }
 
-  try {
-    const parsed = JSON.parse(localStorage.getItem("mock_recent_docs") || "[]");
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.map((doc: Partial<MockDoc>) => ({
-      id: typeof doc.id === "string" ? doc.id : crypto.randomUUID(),
-      fileName: typeof doc.fileName === "string" ? doc.fileName : "Untitled",
-      date: typeof doc.date === "string" ? doc.date : "",
-      preview: typeof doc.preview === "string" ? doc.preview : "",
-      folderId: typeof doc.folderId === "string" ? doc.folderId : null,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function loadFolders(defaultFolders: Folder[]): Folder[] {
-  if (typeof window === "undefined") {
-    return defaultFolders;
+  if (status === "failed") {
+    return "bg-rose-500/15 text-rose-300 border border-rose-500/30";
   }
 
-  try {
-    const parsed = JSON.parse(localStorage.getItem("mock_folders") || "null");
-    if (!Array.isArray(parsed)) {
-      return defaultFolders;
-    }
-
-    return parsed.map((folder: Partial<Folder>) => ({
-      id: typeof folder.id === "string" ? folder.id : crypto.randomUUID(),
-      name: typeof folder.name === "string" ? folder.name : "New Folder",
-      parentId: typeof folder.parentId === "string" ? folder.parentId : null,
-      isEditing: Boolean(folder.isEditing),
-    }));
-  } catch {
-    return defaultFolders;
+  if (status === "processing") {
+    return "bg-amber-500/15 text-amber-200 border border-amber-500/30";
   }
+
+  return "bg-zinc-700/40 text-zinc-300 border border-zinc-700";
 }
 
 export default function DocumentsPage() {
   const { t } = useLanguage();
-  const [recentDocs, setRecentDocs] = useState<MockDoc[]>(() => loadRecentDocs());
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const router = useRouter();
+  const [documents, setDocuments] = useState<DocumentsPageItem[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Folder Mock Data
-  const defaultFolders: Folder[] = [
-    { id: "f1", name: "Immigration Papers", parentId: null, isEditing: false },
-    { id: "f2", name: "Visas", parentId: "f1", isEditing: false }
-  ];
-  const [folders, setFolders] = useState<Folder[]>(() => loadFolders(defaultFolders));
+  useEffect(() => {
+    let active = true;
 
-  const translatedDocs: MockDoc[] = [
-    { id: "mock_123", fileName: "Legal_Permit_Document.pdf", date: "Oct 24, 2026", preview: "https://images.unsplash.com/photo-1626240098906-896db84fa07f?q=80&w=200&auto=format&fit=crop", folderId: "f1" }
-  ];
+    async function loadDocuments() {
+      try {
+        setLoadState("loading");
+        setError(null);
 
-  const saveFolders = (newFolders: Folder[]) => {
-    setFolders(newFolders);
-    localStorage.setItem("mock_folders", JSON.stringify(newFolders));
-  };
+        const response = await fetch("/api/documents");
+        const payload = (await response.json()) as
+          | { data?: DocumentsPageItem[]; error?: string }
+          | undefined;
 
-  // Filter docs by Selected Folder
-  const filterByFolder = (docs: MockDoc[]) => {
-    if (activeFolderId === null) return docs;
-    return docs.filter(doc => doc.folderId === activeFolderId);
-  };
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error || "Unable to load documents.");
+        }
 
-  const filteredRecent = filterByFolder(recentDocs);
-  const filteredTranslated = filterByFolder(translatedDocs);
+        if (!active) {
+          return;
+        }
 
-  // --- Folder Management ---
-  const handleAddFolder = (parentId: string | null) => {
-    const newFolder: Folder = {
-      id: "folder_" + Math.random().toString(36).substring(7),
-      name: "New Folder",
-      parentId,
-      isEditing: true
+        const sorted = [...payload.data].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+        setDocuments(sorted);
+        setLoadState("ready");
+      } catch (loadError) {
+        if (!active) {
+          return;
+        }
+
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load documents.",
+        );
+        setLoadState("error");
+      }
+    }
+
+    void loadDocuments();
+
+    return () => {
+      active = false;
     };
-    saveFolders([...folders, newFolder]);
-  };
+  }, []);
 
-  const handleUpdateFolderName = (id: string, newName: string) => {
-    saveFolders(folders.map(f => f.id === id ? { ...f, name: newName, isEditing: false } : f));
-  };
+  async function handleDelete(id: string) {
+    try {
+      setDeletingId(id);
 
-  // --- Drag and Drop ---
-  const handleDragStart = (e: React.DragEvent, docId: string, isRecent: boolean) => {
-    e.dataTransfer.setData("docId", docId);
-    e.dataTransfer.setData("isRecent", isRecent ? "true" : "false");
-  };
+      const response = await fetch(`/api/documents/${id}`, {
+        method: "DELETE",
+      });
 
-  const handleDropToFolder = (e: React.DragEvent, targetFolderId: string | null) => {
-    e.preventDefault();
-    const docId = e.dataTransfer.getData("docId");
-    const isRecent = e.dataTransfer.getData("isRecent") === "true";
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
 
-    if (isRecent) {
-      const updated = recentDocs.map(d => d.id === docId ? { ...d, folderId: targetFolderId } : d);
-      setRecentDocs(updated);
-      localStorage.setItem("mock_recent_docs", JSON.stringify(updated));
-    } else {
-      // In a real app we'd trigger an API to move translated doc
-      alert(`Moved document to folder!`);
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to delete document.");
+      }
+
+      setDocuments((current) => current.filter((document) => document.id !== id));
+      router.refresh();
+    } catch (deleteError) {
+      alert(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete document.",
+      );
+    } finally {
+      setDeletingId(null);
     }
-  };
+  }
 
-  const handleDelete = (id: string, isRecent: boolean) => {
-    if (isRecent) {
-      const updated = recentDocs.filter(d => d.id !== id);
-      setRecentDocs(updated);
-      localStorage.setItem("mock_recent_docs", JSON.stringify(updated));
-    } else {
-      alert("Deleted from Database!");
-    }
-  };
+  const translatedDocs = documents.filter((document) => document.hasTranslation);
+  const uploadedDocs = documents.filter((document) => !document.hasTranslation);
 
-  // Render Folder Tree Recursive Function
-  const renderFolders = (parentId: string | null, depth = 0) => {
-    return folders
-      .filter(f => f.parentId === parentId)
-      .map(folder => (
-        <div key={folder.id} className="w-full">
-          <div 
-            onClick={() => setActiveFolderId(folder.id)}
-            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-zinc-800"); }}
-            onDragLeave={(e) => e.currentTarget.classList.remove("bg-zinc-800")}
-            onDrop={(e) => { e.currentTarget.classList.remove("bg-zinc-800"); handleDropToFolder(e, folder.id); }}
-            style={{ paddingLeft: `${depth * 1 + 1}rem` }}
-            className={`group w-full py-2 pr-4 flex items-center justify-between cursor-pointer transition-colors ${activeFolderId === folder.id ? 'bg-zinc-900 border-l-2 border-emerald-500' : 'hover:bg-zinc-900/50 border-l-2 border-transparent'}`}
-          >
-            <div className="flex items-center gap-2 overflow-hidden">
-              <svg className="w-4 h-4 text-zinc-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
-              {folder.isEditing ? (
-                <input 
-                  autoFocus
-                  defaultValue={folder.name}
-                  onBlur={(e) => handleUpdateFolderName(folder.id, e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateFolderName(folder.id, e.currentTarget.value)}
-                  className={`bg-black border border-zinc-700 text-white px-1 py-0.5 rounded w-full outline-none focus:border-emerald-500 ${depth === 0 ? 'text-base font-semibold' : 'text-sm'}`}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span className={`text-zinc-300 truncate cursor-text ${depth === 0 ? 'text-base font-semibold text-zinc-200' : 'text-sm'}`} onDoubleClick={(e) => { e.stopPropagation(); setFolders(folders.map(f => f.id === folder.id ? { ...f, isEditing: true } : f)); }}>
-                  {folder.name}
-                </span>
-              )}
-            </div>
-            
-            {/* Add Sub-folder Button */}
-            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleAddFolder(folder.id); }}
-                className="text-zinc-500 hover:text-white p-0.5 rounded-md hover:bg-zinc-700" 
-                title="New Subfolder"
-              >
-                +
-              </button>
-            </div>
-          </div>
-          {renderFolders(folder.id, depth + 1)}
-        </div>
-      ));
-  };
+  const renderCard = (document: DocumentsPageItem) => {
+    const status = formatStatus(document);
 
-
-  return (
-    <div className="flex h-screen bg-black text-white overflow-hidden">
-      
-      {/* LEFT SIDEBAR: Folders */}
-      <aside className="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col h-full overflow-y-auto">
-        <div className="p-4 border-b border-zinc-800 flex items-center justify-between sticky top-0 bg-zinc-950 z-10">
-          <h2 className="text-sm font-bold tracking-wider text-zinc-400 uppercase">
-            {t("Folders", "Carpetas")}
-          </h2>
-          <button onClick={() => handleAddFolder(null)} className="text-zinc-400 hover:text-white hover:bg-zinc-800 p-1 rounded transition">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          </button>
-        </div>
-        
-        <div className="py-2 flex-1">
-          <div 
-            onClick={() => setActiveFolderId(null)}
-            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-zinc-800"); }}
-            onDragLeave={(e) => e.currentTarget.classList.remove("bg-zinc-800")}
-            onDrop={(e) => { e.currentTarget.classList.remove("bg-zinc-800"); handleDropToFolder(e, null); }}
-            className={`w-full py-2 px-4 flex items-center gap-2 cursor-pointer transition-colors ${activeFolderId === null ? 'bg-zinc-900 border-l-2 border-emerald-500' : 'hover:bg-zinc-900/50 border-l-2 border-transparent'}`}
-          >
-             <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-             <span className="text-sm font-medium">{t("All Documents", "Todos los Documentos")}</span>
-          </div>
-          <div className="my-2 h-px w-full bg-zinc-800"></div>
-          {renderFolders(null, 0)}
-        </div>
-      </aside>
-
-      {/* RIGHT SIDE: Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-y-auto p-8 relative">
-        <div className="flex justify-between items-end mb-10 border-b border-zinc-800 pb-6 w-full max-w-5xl">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-100 flex items-center gap-3">
-              {activeFolderId ? folders.find(f => f.id === activeFolderId)?.name : t("My Documents", "Mis Documentos")}
-            </h1>
-            <p className="text-sm text-zinc-500 mt-2">
-              {t("Drag and drop document cards into folders on the left to organize.", "Arrastra y suelta documentos a las carpetas a la izquierda para organizar.")}
+    return (
+      <article
+        key={document.id}
+        className="rounded-[1.75rem] border border-zinc-800 bg-zinc-950 p-5 shadow-lg shadow-black/20"
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3
+              className={`truncate text-lg font-semibold ${
+                document.hasTranslation ? "text-emerald-300" : "text-zinc-100"
+              }`}
+              title={document.fileName}
+            >
+              {document.fileName}
+            </h3>
+            <p className="mt-2 text-xs text-zinc-500">
+              {new Date(document.createdAt).toLocaleString()}
             </p>
           </div>
-          <Link href="/upload" className="mb-1 text-sm font-semibold bg-zinc-100 text-black px-4 py-2 rounded-lg hover:bg-white transition-colors">
-            {t("+ New Photo/Doc", "+ Nueva Foto")}
+          <span
+            className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${getStatusClasses(
+              status,
+            )}`}
+          >
+            {status}
+          </span>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-black/40 px-4 py-8 text-center text-sm text-zinc-500">
+          {document.hasTranslation
+            ? t(
+                "Spanish PDF and summary are ready.",
+                "El PDF en espanol y el resumen ya estan listos.",
+              )
+            : t(
+                "Open the document to translate, preview, or manage it.",
+                "Abre el documento para traducirlo, previsualizarlo o administrarlo.",
+              )}
+        </div>
+
+        <div className="mt-4 flex gap-3">
+          <Link
+            href={`/document/${document.id}`}
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-xl border border-zinc-700 px-4 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+          >
+            {document.hasTranslation
+              ? t("Open translation", "Abrir traduccion")
+              : t("Open document", "Abrir documento")}
+          </Link>
+          <button
+            type="button"
+            onClick={() => void handleDelete(document.id)}
+            disabled={deletingId === document.id}
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-rose-500/15 px-4 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {deletingId === document.id
+              ? t("Deleting...", "Eliminando...")
+              : t("Delete", "Eliminar")}
+          </button>
+        </div>
+      </article>
+    );
+  };
+
+  return (
+    <div className="flex min-h-screen bg-black px-6 py-12 text-white">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mb-10 flex flex-col gap-4 border-b border-zinc-800 pb-6 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-zinc-100">
+              {t("My documents", "Mis documentos")}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
+              {t(
+                "View your real uploads and completed Spanish translations here.",
+                "Aqui puedes ver tus cargas reales y las traducciones completas al espanol.",
+              )}
+            </p>
+          </div>
+
+          <Link
+            href="/upload"
+            className="inline-flex h-12 items-center justify-center rounded-xl bg-zinc-100 px-5 text-sm font-semibold text-black transition hover:bg-white"
+          >
+            {t("Upload another", "Subir otro")}
           </Link>
         </div>
 
-        <div className="w-full max-w-5xl">
-          {/* Recently Received Documents */}
-          <div className="mb-16">
-            <h2 className="text-xl font-semibold text-zinc-200 mb-6 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              {t("Recently Received", "Recibidos Recientemente")}
-            </h2>
-            
-            {filteredRecent.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                {filteredRecent.map((doc) => (
-                  <div 
-                    key={doc.id} 
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, doc.id, true)}
-                    className="flex flex-col p-4 border border-zinc-800 bg-zinc-950 rounded-2xl hover:border-zinc-500 transition-colors cursor-grab active:cursor-grabbing group relative overflow-hidden"
-                  >
-                    <div className="w-full h-32 bg-zinc-900 rounded-xl mb-4 overflow-hidden flex items-center justify-center border border-zinc-800 relative">
-                      {doc.preview.startsWith("data:image") ? (
-                        <Image
-                          src={doc.preview}
-                          alt="preview"
-                          fill
-                          unoptimized
-                          className="object-cover opacity-60"
-                        />
-                      ) : (
-                        <svg className="w-10 h-10 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      )}
-                      
-                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-4">
-                         <Link href={`/document/${doc.id}`} className="w-full text-center text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded p-2 transition">
-                           {t("Translate Now", "Traducir Ahora")}
-                         </Link>
-                         <button onClick={() => handleDelete(doc.id, true)} className="w-full text-xs font-semibold bg-red-950/80 border border-red-900 hover:bg-red-900 text-red-200 rounded p-2 transition">
-                           {t("Delete", "Eliminar")}
-                         </button>
-                      </div>
-                    </div>
-                    <h3 className="font-medium text-zinc-300 truncate" title={doc.fileName}>{doc.fileName}</h3>
-                    <p className="text-xs text-zinc-500 mt-1">{doc.date}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="w-full p-8 border border-zinc-800/50 bg-zinc-950/50 rounded-2xl text-center">
-                <p className="text-zinc-600 text-sm">
-                  {t("No recent documents.", "No hay documentos recientes.")}
-                </p>
-              </div>
-            )}
+        {loadState === "loading" ? (
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 px-8 py-12 text-center text-zinc-400">
+            {t("Loading documents...", "Cargando documentos...")}
           </div>
+        ) : null}
 
-          {/* Translated Docs Section */}
-          <div>
-            <h2 className="text-xl font-semibold text-zinc-200 mb-6 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              {t("Translated Docs", "Documentos Traducidos")}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-              {filteredTranslated.map((doc) => (
-                <div 
-                  key={doc.id} 
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, doc.id, false)}
-                  className="flex flex-col p-4 border border-zinc-800 bg-zinc-950 rounded-2xl hover:border-zinc-500 transition-colors cursor-grab active:cursor-grabbing group relative overflow-hidden"
-                >
-                  <div className="w-full h-32 bg-zinc-900 rounded-xl mb-4 overflow-hidden flex items-center justify-center border border-zinc-800 relative">
-                    <Image
-                      src={doc.preview}
-                      alt="preview"
-                      fill
-                      unoptimized
-                      className="object-cover opacity-40"
-                    />
-                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-4">
-                        <Link href={`/document/${doc.id}`} className="w-full text-center text-xs font-semibold bg-white text-black hover:bg-zinc-200 rounded p-2 transition">
-                          {t("Open Translation", "Abrir Traducción")}
-                        </Link>
-                        <button onClick={() => alert("Summary mock")} className="w-full text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-600 rounded p-2 transition">
-                          {t("Hear Summary", "Escuchar Resumen")}
-                        </button>
-                    </div>
-                  </div>
-                  <h3 className="font-medium text-emerald-400 truncate" title={doc.fileName}>{doc.fileName}</h3>
-                  <p className="text-xs text-zinc-500 mt-1">{doc.date}</p>
+        {loadState === "error" ? (
+          <div className="rounded-[2rem] border border-rose-500/30 bg-rose-500/10 px-8 py-12 text-center">
+            <p className="text-sm leading-7 text-rose-100">
+              {error ?? t("Unable to load documents.", "No se pudieron cargar los documentos.")}
+            </p>
+          </div>
+        ) : null}
+
+        {loadState === "ready" && documents.length === 0 ? (
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950 px-8 py-12 text-center">
+            <p className="text-lg font-semibold text-zinc-200">
+              {t("No documents yet.", "Todavia no hay documentos.")}
+            </p>
+            <p className="mt-3 text-sm leading-7 text-zinc-500">
+              {t(
+                "Upload your first PDF or photo to start building your document history.",
+                "Sube tu primer PDF o foto para empezar tu historial de documentos.",
+              )}
+            </p>
+          </div>
+        ) : null}
+
+        {loadState === "ready" && documents.length > 0 ? (
+          <div className="space-y-12">
+            <section>
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-semibold text-zinc-200">
+                <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                {t("Uploaded Docs", "Documentos subidos")}
+              </h2>
+              {uploadedDocs.length > 0 ? (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                  {uploadedDocs.map(renderCard)}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
+              ) : (
+                <div className="rounded-[1.75rem] border border-zinc-800/60 bg-zinc-950/60 px-6 py-8 text-sm text-zinc-500">
+                  {t(
+                    "No untranslated uploads are waiting right now.",
+                    "No hay cargas sin traducir en este momento.",
+                  )}
+                </div>
+              )}
+            </section>
 
+            <section>
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-semibold text-zinc-200">
+                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                {t("Translated Docs", "Documentos traducidos")}
+              </h2>
+              {translatedDocs.length > 0 ? (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                  {translatedDocs.map(renderCard)}
+                </div>
+              ) : (
+                <div className="rounded-[1.75rem] border border-zinc-800/60 bg-zinc-950/60 px-6 py-8 text-sm text-zinc-500">
+                  {t(
+                    "No completed translations yet.",
+                    "Todavia no hay traducciones completadas.",
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

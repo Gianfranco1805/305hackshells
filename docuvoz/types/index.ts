@@ -58,6 +58,18 @@ export type PrivateDocumentListItem = {
   summaryEs: string | null;
 };
 
+export type DocumentsPageItem = {
+  id: string;
+  title: string;
+  fileName: string;
+  createdAt: string;
+  mimeType: string | null;
+  source: "private" | "legacy";
+  translationStatus: TranslationStatus | "ready" | "processing" | "failed" | "unavailable";
+  hasTranslation: boolean;
+  summaryEs: string | null;
+};
+
 export type DocumentViewerData = {
   id: string;
   title: string;

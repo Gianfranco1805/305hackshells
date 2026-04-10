@@ -282,3 +282,164 @@ export async function translatePrivateDocumentToSpanish(documentId: number) {
     throw new Error(message);
   }
 }
+
+export async function deletePrivateDocumentTranslation(documentId: number) {
+  const { client, userId } = await createServerClient();
+
+  const { data: translation, error } = await client
+    .from("private_document_translations")
+    .select(
+      "id,document_id,user_id,translated_text_bucket,translated_text_path,translated_pdf_bucket,translated_pdf_path,metadata_bucket,metadata_path",
+    )
+    .eq("document_id", documentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!translation) {
+    throw new Error("Translation not found.");
+  }
+
+  const typedTranslation = translation as Pick<
+    TranslationRecord,
+    | "id"
+    | "document_id"
+    | "user_id"
+    | "translated_text_bucket"
+    | "translated_text_path"
+    | "translated_pdf_bucket"
+    | "translated_pdf_path"
+    | "metadata_bucket"
+    | "metadata_path"
+  >;
+
+  const removals: Array<{ bucket: string; paths: string[] }> = [];
+
+  if (typedTranslation.translated_text_path) {
+    removals.push({
+      bucket: typedTranslation.translated_text_bucket,
+      paths: [typedTranslation.translated_text_path],
+    });
+  }
+
+  if (typedTranslation.translated_pdf_path) {
+    removals.push({
+      bucket: typedTranslation.translated_pdf_bucket,
+      paths: [typedTranslation.translated_pdf_path],
+    });
+  }
+
+  if (typedTranslation.metadata_path) {
+    removals.push({
+      bucket: typedTranslation.metadata_bucket,
+      paths: [typedTranslation.metadata_path],
+    });
+  }
+
+  for (const removal of removals) {
+    const { error: removeError } = await client.storage
+      .from(removal.bucket)
+      .remove(removal.paths);
+
+    if (removeError) {
+      throw new Error(removeError.message);
+    }
+  }
+
+  const { error: deleteError } = await client
+    .from("private_document_translations")
+    .delete()
+    .eq("id", typedTranslation.id)
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  return {
+    documentId: typedTranslation.document_id,
+    deleted: true,
+  };
+}
+
+export async function deletePrivateDocument(documentId: number) {
+  const { client, userId } = await createServerClient();
+
+  const { data: document, error: documentError } = await client
+    .from("private_documents")
+    .select(
+      "id,user_id,storage_bucket,storage_path,metadata_bucket,metadata_path",
+    )
+    .eq("id", documentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (documentError) {
+    throw new Error(documentError.message);
+  }
+
+  if (!document) {
+    throw new Error("Document not found.");
+  }
+
+  const { data: translation, error: translationError } = await client
+    .from("private_document_translations")
+    .select(
+      "translated_text_bucket,translated_text_path,translated_pdf_bucket,translated_pdf_path,metadata_bucket,metadata_path",
+    )
+    .eq("document_id", documentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (translationError) {
+    throw new Error(translationError.message);
+  }
+
+  const removals = new Map<string, Set<string>>();
+  const addRemoval = (bucket: string | null | undefined, pathValue: string | null | undefined) => {
+    if (!bucket || !pathValue) {
+      return;
+    }
+
+    const bucketPaths = removals.get(bucket) ?? new Set<string>();
+    bucketPaths.add(pathValue);
+    removals.set(bucket, bucketPaths);
+  };
+
+  addRemoval(document.storage_bucket, document.storage_path);
+  addRemoval(document.metadata_bucket, document.metadata_path);
+
+  if (translation) {
+    addRemoval(translation.translated_text_bucket, translation.translated_text_path);
+    addRemoval(translation.translated_pdf_bucket, translation.translated_pdf_path);
+    addRemoval(translation.metadata_bucket, translation.metadata_path);
+  }
+
+  for (const [bucket, paths] of removals.entries()) {
+    const { error: removeError } = await client.storage
+      .from(bucket)
+      .remove([...paths]);
+
+    if (removeError) {
+      throw new Error(removeError.message);
+    }
+  }
+
+  const { error: deleteError } = await client
+    .from("private_documents")
+    .delete()
+    .eq("id", documentId)
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  return {
+    documentId,
+    deleted: true,
+  };
+}

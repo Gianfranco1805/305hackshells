@@ -17,6 +17,7 @@ export default function DocumentPageClient({
   const { t } = useLanguage();
   const router = useRouter();
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isDeletingTranslation, setIsDeletingTranslation] = useState(false);
   const [translateError, setTranslateError] = useState<string | null>(null);
 
   async function handleTranslate() {
@@ -43,6 +44,35 @@ export default function DocumentPageClient({
       );
     } finally {
       setIsTranslating(false);
+    }
+  }
+
+  async function handleDeleteTranslation() {
+    try {
+      setIsDeletingTranslation(true);
+      setTranslateError(null);
+
+      const response = await fetch(`/api/documents/${document.id}/translation`, {
+        method: "DELETE",
+      });
+
+      const payload = (await response.json()) as
+        | { data?: unknown; error?: string }
+        | undefined;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Translation delete failed.");
+      }
+
+      router.refresh();
+    } catch (error) {
+      setTranslateError(
+        error instanceof Error
+          ? error.message
+          : "Translation delete failed.",
+      );
+    } finally {
+      setIsDeletingTranslation(false);
     }
   }
 
@@ -95,6 +125,19 @@ export default function DocumentPageClient({
                 defaultLabel={t("Read in Spanish", "Leer en espa ol")}
                 loadingLabel={t("Generating audio...", "Generando audio...")}
               />
+            ) : null}
+
+            {document.canTranslate && (document.translatedPdfUrl || document.translatedText) ? (
+              <button
+                type="button"
+                onClick={() => void handleDeleteTranslation()}
+                disabled={isDeletingTranslation}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-rose-500/15 px-4 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isDeletingTranslation
+                  ? t("Deleting translation...", "Eliminando traduccion...")
+                  : t("Delete translation", "Eliminar traduccion")}
+              </button>
             ) : null}
           </div>
         </div>
