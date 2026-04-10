@@ -8,7 +8,16 @@ import {
 import { apiError, apiSuccess, createServerClient } from "@/lib/supabase";
 
 export async function POST(request: Request) {
-  const { client, userId } = await createServerClient();
+  let client: Awaited<ReturnType<typeof createServerClient>>["client"] | null = null;
+  let userId = "";
+
+  try {
+    ({ client, userId } = await createServerClient());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Authentication failed.";
+    return apiError(message, message.toLowerCase().includes("unauthenticated") ? 401 : 500);
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
   const extractedTextFromClient = formData.get("extractedText");
