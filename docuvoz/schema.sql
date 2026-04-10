@@ -56,6 +56,42 @@ create table if not exists public.document_text (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.private_documents (
+  id bigint generated always as identity primary key,
+  user_id text not null,
+
+  title text not null,
+  language text not null default 'en',
+
+  storage_bucket text not null default 'privateLegalDocs',
+  storage_path text not null unique,
+  metadata_bucket text not null default 'privateDocData',
+  metadata_path text not null unique,
+
+  file_name text not null,
+  file_ext text,
+  mime_type text,
+  file_size_bytes bigint,
+  sha256_hash text,
+
+  is_fillable_pdf boolean not null default false,
+  page_count integer,
+
+  extraction_status text not null default 'not_attempted'
+    check (extraction_status in ('not_attempted', 'success', 'partial', 'failed')),
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.private_document_text (
+  document_id bigint primary key references public.private_documents(id) on delete cascade,
+  extracted_text text,
+  extraction_method text check (extraction_method in ('pdf', 'docx', 'ocr', 'none')) default 'none',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.scrape_runs (
   id bigint generated always as identity primary key,
   started_at timestamptz not null default now(),
@@ -73,11 +109,86 @@ create index if not exists idx_legal_documents_jurisdiction on public.legal_docu
 create index if not exists idx_legal_documents_category on public.legal_documents (category);
 create index if not exists idx_legal_documents_doc_kind on public.legal_documents (doc_kind);
 create index if not exists idx_legal_documents_hash on public.legal_documents (sha256_hash);
+create index if not exists idx_private_documents_user_id on public.private_documents (user_id);
+create index if not exists idx_private_documents_language on public.private_documents (language);
+create index if not exists idx_private_documents_hash on public.private_documents (sha256_hash);
 
--- Future migration note for private user uploads:
--- 1. Create private storage buckets named `privateLegalDocs` and `privateDocData`.
--- 2. If you want private uploads to be modeled distinctly from scraped corpus data,
---    either add a dedicated `private_documents` table or relax the jurisdiction
---    constraint here to include a value like `private`.
--- 3. The app upload flow now stores a language value per uploaded document and
---    writes mirrored JSON metadata into the privateDocData bucket.
+alter table public.private_documents enable row level security;
+alter table public.private_document_text enable row level security;
+
+create policy "private_documents_select_own"
+on public.private_documents
+for select
+using (auth.jwt() ->> 'sub' = user_id);
+
+create policy "private_documents_insert_own"
+on public.private_documents
+for insert
+with check (auth.jwt() ->> 'sub' = user_id);
+
+create policy "private_documents_update_own"
+on public.private_documents
+for update
+using (auth.jwt() ->> 'sub' = user_id)
+with check (auth.jwt() ->> 'sub' = user_id);
+
+create policy "private_documents_delete_own"
+on public.private_documents
+for delete
+using (auth.jwt() ->> 'sub' = user_id);
+
+create policy "private_document_text_select_own"
+on public.private_document_text
+for select
+using (
+  exists (
+    select 1
+    from public.private_documents d
+    where d.id = private_document_text.document_id
+      and d.user_id = auth.jwt() ->> 'sub'
+  )
+);
+
+create policy "private_document_text_insert_own"
+on public.private_document_text
+for insert
+with check (
+  exists (
+    select 1
+    from public.private_documents d
+    where d.id = private_document_text.document_id
+      and d.user_id = auth.jwt() ->> 'sub'
+  )
+);
+
+create policy "private_document_text_update_own"
+on public.private_document_text
+for update
+using (
+  exists (
+    select 1
+    from public.private_documents d
+    where d.id = private_document_text.document_id
+      and d.user_id = auth.jwt() ->> 'sub'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.private_documents d
+    where d.id = private_document_text.document_id
+      and d.user_id = auth.jwt() ->> 'sub'
+  )
+);
+
+create policy "private_document_text_delete_own"
+on public.private_document_text
+for delete
+using (
+  exists (
+    select 1
+    from public.private_documents d
+    where d.id = private_document_text.document_id
+      and d.user_id = auth.jwt() ->> 'sub'
+  )
+);
